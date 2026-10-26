@@ -5,212 +5,112 @@
 #include <ranges>
 #include <iostream>
 #include <format>
+#include <string_view>
 #include <fstream>
 #include <cstdlib>
-struct Nested {
-    std::string nested_str1;
-    float nested_flt;
+#include <array>
+
+
+// Must declare the incomplete type up front to get populated from the CSV header. 
+struct Car;
+
+constexpr char csv_text[]{
+    #embed "car_stats.csv"
 };
 
-struct S {
-    int num;
-    std::string str;
-    Nested n;
+constexpr std::string_view csv{std::define_static_string(csv_text), sizeof(csv_text)};
+constexpr size_t N = std::ranges::distance(csv | std::views::split('\n')) - 1;
 
-    void print(){
-        std::println("string: {}, number: {}", str, num);
-    }
-};
-
-
-
-enum class JobStatus : uint8_t {
-    INVALID = 0, // Jobs that can't parse
-    QUEUED = 1,
-    RUNNING = 2,
-    DONE = 3,
-    ERROR = 4 // Jobs that throw runtime errors
-};
-
-
-
-template <typename T>
-constexpr void printMembers(){
-    constexpr std::meta::info r = ^^T;
-    std::println("Struct: {}", std::meta::display_string_of(r));
-    constexpr auto ctx1 = std::meta::access_context::current();
-    // constexpr auto r_members = 
-    template for (constexpr std::meta::info member : std::define_static_array(std::meta::nonstatic_data_members_of(r, ctx1))){
-        // if constexpr (std::meta::is_class_type(member)){
-        using MemberType = typename [: std::meta::type_of(member) :];
-        if constexpr (std::is_aggregate_v<MemberType> && !std::is_same_v<MemberType, std::string>){
-
-            printMembers<MemberType>();
-        }
-        if constexpr (std::meta::has_identifier(member)){
-            std::cout << "Name: " << std::meta::identifier_of(member) << "\n";
-        }
-    }
+consteval auto getMembers(){
+    return csv
+    | std::views::split('\n')
+    | std::views::take(1)
+    | std::views::transform([](auto row) { return std::string_view{row} | std::views::split(','); })
+    | std::views::join
+    | std::views::transform([](auto&& r){ return std::string_view{r}; });
 }
 
-template <typename T>
-constexpr void printEnum() {
-    constexpr std::meta::info r = ^^T;
-    template for (constexpr std::meta::info meta : std::define_static_array(std::meta::enumerators_of(r))){
-        // if constexpr (std::meta::has_identifier(meta)){
-            std::cout << "Name: " << std::meta::identifier_of(meta) << "\n";
-        // }
+// Ai-Generated double parsing function
+constexpr double parse_double(std::string_view s) {
+    std::size_t i = 0;
+    bool negative = false;
+
+    if (i < s.size() && (s[i] == '-' || s[i] == '+')) {
+        negative = (s[i] == '-');
+        ++i;
     }
-}
 
-/**
- * @brief Serialize a POD struct 
- * 
- * @tparam S type of a structure to serialize
- */
-template <typename S>
-constexpr std::vector<std::string> serialize(const S& s){
-    // write to a file called "serialize.txt"
-    constexpr std::meta::info r = ^^S;
-    std::vector<std::string> serialization;
+    std::uint64_t mantissa = 0;
+    int digits = 0;        // digits accumulated into mantissa
+    int frac_digits = 0;   // how many of those were after the '.'
+    bool seen_dot = false;
+    bool any_digit = false;
 
-    static constexpr std::meta::access_context ctx = std::meta::access_context::unchecked();
-    static constexpr auto members = std::define_static_array(std::meta::nonstatic_data_members_of(r, ctx));
-    template for (constexpr std::meta::info m : members){
-        serialization.push_back(std::format("{}", s.[:m:]));
-    } 
-    return serialization;
-}
-
-constexpr std::vector<std::string> splitString(std::string line, std::string delim){
-    return std::views::split(line, delim) | std::ranges::to<std::vector<std::string>>();
-}
-
-// template <typename S>
-// constexpr S deserialize(const std::vector<std::string>& serialized){
-//     S des;
-//     constexpr std::meta::info r = ^^des;
-//     static constexpr std::meta::access_context ctx = std::meta::access_context::unchecked();
-//     static constexpr auto members = std::define_static_array(std::meta::nonstatic_data_members_of(r, ctx));
-//     template for (constexpr auto [serial, reflect] : std::views::zip(serialized, r)){
-//         using MemberType = [: std::meta::type_of(reflect) :];
-//         // Entire string is a line. 
-//         MemberType t;
-//         if constexpr (std::is_same_v<MemberType, int>){
-//             des.[:reflect:] = std::stoi(serial);
-//         } else if constexpr(std::is_same_v<MemberType, float>){
-//             des.[:reflect:] = std::stof(serial);
-//         } else if constexpr (std::is_same_v<MemberType, std::string>){
-//             des.[:reflect:] = serial;
-//         }
-//     }
-//     return des;
-// }
-
-struct Base{
-    virtual void printType() = 0;
-};
-
-struct Factory{};
-
-constexpr Factory AbstractFactory;
-
-// Is there a way to type annotate the types so they don't have to live in a specific namespace? 
-struct [[=AbstractFactory]] Derived1 : public Base {
-    void printType() override {
-        constexpr std::meta::info r = ^^Derived1;
-        std::println("Class name: {}", std::meta::display_string_of(r));
-    }
-};
-
-struct [[=AbstractFactory]] Derived2 : public Base {
-    void printType() override {
-        constexpr std::meta::info r = ^^Derived2;
-        std::println("Class name: {}", std::meta::display_string_of(r));
-    }
-};
-
-struct NotDerived {
-    void printType(){
-        constexpr std::meta::info r = ^^NotDerived;
-        std::println("Class name of not derived class: {}", std::meta::display_string_of(r));    }
-};
-
-struct Incomplete;
-
-void findClass(){
-    constexpr std::meta::info n = ^^::; // global namespace reflectiom
-    constexpr auto ctx1 = std::meta::access_context::current();
-    template for (constexpr std::meta::info cls : std::define_static_array(std::meta::members_of(n, ctx1))){
-        if constexpr (std::meta::is_type(cls)){
-            constexpr auto annotations = std::define_static_array(std::meta::annotations_of(cls));
-            if constexpr (!annotations.empty()){
-                std::println("{} Has annotations!", std::meta::display_string_of(cls));
+    for (; i < s.size(); ++i) {
+        const char c = s[i];
+        if (c == '.') {
+            if (seen_dot) throw "parse_double: second decimal point";
+            seen_dot = true;
+        } else if (c >= '0' && c <= '9') {
+            any_digit = true;
+            if (digits < 18) {                 // stay inside uint64_t
+                mantissa = mantissa * 10 + static_cast<unsigned>(c - '0');
+                ++digits;
+                if (seen_dot) ++frac_digits;
+            } else if (!seen_dot) {
+                throw "parse_double: integer part too large";
             }
+            // extra fractional digits beyond 18 are dropped
+        } else {
+            throw "parse_double: unexpected character";
         }
-
     }
+
+    if (!any_digit) throw "parse_double: no digits";
+
+    double scale = 1.0;
+    for (int k = 0; k < frac_digits; ++k) scale *= 10.0;
+
+    const double result = static_cast<double>(mantissa) / scale;
+    return negative ? -result : result;
 }
 
-// combine this with ^^:: to reflect on whe global namespace
-// Base* makeBasePtr(std::string_view name){
-//     constexpr std::meta::info n = ^^::; // global namespace reflectiom
-//     constexpr auto ctx1 = std::meta::access_context::current();
-//     template for (constexpr std::meta::info cls : std::define_static_array(std::meta::members_of(n, ctx1))){
-        
-//         std::println("Class: {}", std::meta::display_string_of(cls));
-//         using T = typename [:cls:];
-//         // constexpr std::string_view clsname = std::meta::identifier_of(cls);
-//         if (name == std::meta::display_string_of(cls)){
-//             return new T();
-//         }
-//     }
-//     return nullptr;
-// }
+// Populate the Car class
+consteval {
 
-// How can we get the annotations on a type? 
+    auto members = getMembers();
 
+    auto data_members = members
+    | std::views::transform([](auto&& member){return std::meta::data_member_spec(^^double, {.name=std::string_view(member)});})
+    | std::ranges::to<std::vector<std::meta::info>>();
+
+    std::meta::define_aggregate(^^Car, data_members);
+}
+
+consteval std::array<Car, N> getCars(){
+    std::array<Car, N> cars{};
+    auto rows = csv 
+                | std::views::split('\n')
+                | std::views::drop(1)  // Drop the header row
+                | std::views::transform([](auto row) { return std::string_view{row} | std::views::split(','); });
+                // Each row is split by comma
+
+    static constexpr auto members = std::define_static_array(std::meta::nonstatic_data_members_of(^^Car, std::meta::access_context::current()));
+    for (auto [i, row]: std::views::enumerate(rows)){
+        auto fieldIterator = row.begin();
+        template for (constexpr std::meta::info dataMem : members){
+            cars[i].[:dataMem:] = parse_double(std::string_view{*fieldIterator});
+            ++fieldIterator;
+        }
+    }
+    return cars;
+}
+constexpr auto cars = getCars();
 
 int main(){
 
-    // FactoryPattern::Derived1 d;
-    // d.printType();
-    // Base* d1 = makeBasePtr("FactoryPattern::Derived1");
-    // d1 ->printType();
-    // Base* d2 = makeBasePtr("FactoryPattern::Derived2");
-    // d2->printType();
-    findClass();
-    // delete d1;
-    // delete d2;
+    for (const Car& c : cars){
+        std::println("Car {}: a = {}, p = {}, vdes = {}", c.id, c.a, c.p, c.vdes);
+    }
+
 }
-    // constexpr S structure;
-    // printMembers<S>();
-    // printEnum<JobStatus>();
-
-    // for (int i : std::views::iota(0, 3)){
-    //     Nested n;
-    //     n.
-    // }
-    // Nested n1{"nested1", 4.5};
-    // Nested n2{"nested2", 5.5};
-    // Nested n3{"nested3", 6.5};
-
-    // n1.nested_str1 ="nested1";
-    // n1.nested_flt = 4.5;
-
-    // Nested n2;
-    // n1.nested_str1 ="nested2";
-    // n1.nested_flt = 5.5;
-
-    // Nested n3;
-    // n1.nested_str1 ="nested3";
-    // n1.nested_flt = 6.5;
-
-    // std::vector<std::string> s1 = serialize(n1);
-    // for (auto x : s1){
-    //     std::println("{}", x);
-    // }
-    // Nested r1 = deserialize<Nested>(s1);
-    
-    // std::println("Hello c++ 26!");
-// }
