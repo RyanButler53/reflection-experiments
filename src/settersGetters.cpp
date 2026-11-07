@@ -21,25 +21,28 @@ constexpr std::string capitalize_first(std::string_view s) {
     return out;
 }
 
+constexpr std::string add_underscore(std::string_view s){
+    std::string out{s};
+    return out + '_';
+}
+
 template <std::meta::info mainStruct, std::meta::info incompleteType>
 constexpr void flattenStruct(std::string_view name = ""){
     constexpr auto ctx = std::meta::access_context::current();
     template for (constexpr std::meta::info mem : std::define_static_array(std::meta::nonstatic_data_members_of(mainStruct, ctx))){
         constexpr auto memType = std::meta::type_of(mem);
-        std::string_view capitalName = capitalize_first(name);
         if constexpr (std::meta::is_fundamental_type(memType)){
-
-            std::println("Primitive: {}{}",capitalName, capitalize_first(std::meta::identifier_of(mem)));
+            std::println("Primitive: {}{}",name, std::meta::identifier_of(mem));
         }else if constexpr (std::meta::is_array_type(memType)){
-            std::println("Array: {}{}", capitalName, capitalize_first(std::meta::identifier_of(mem)));
+            std::println("Array: {}{}", name, std::meta::identifier_of(mem));
         } else if constexpr (std::meta::is_class_type(memType)){
-            flattenStruct<memType, incompleteType>(capitalize_first(std::meta::identifier_of(mem)));
+            std::string underscored = add_underscore(std::meta::identifier_of(mem));
+            flattenStruct<memType, incompleteType>(std::string_view(underscored));
         } else {
             std::println("Something else:: {}", std::meta::display_string_of(mem));
         }
     }
 }
-
 
 
 
