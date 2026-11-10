@@ -5,10 +5,11 @@
 #include <functional>
 #include <flat_map>
 
-class SetterGetter;
 class SubSubPacket_;
+class DataPacket_;
+class DataPacket2_;
 
-// Iterate over the members of DataPacket
+// String manipulation funct
 
 constexpr std::string capitalize_first(std::string_view s) {
     std::string out{s};
@@ -28,23 +29,7 @@ constexpr std::string concat(std::string_view s1, std::string_view s2){
     return str1 + str2;
 }
 
-template <std::meta::info mainStruct, std::meta::info incompleteType>
-constexpr void flattenStruct(std::string_view name = ""){
-    constexpr auto ctx = std::meta::access_context::current();
-    template for (constexpr std::meta::info mem : std::define_static_array(std::meta::nonstatic_data_members_of(mainStruct, ctx))){
-        constexpr auto memType = std::meta::type_of(mem);
-        if constexpr (std::meta::is_fundamental_type(memType)){
-            std::println("Primitive: {}{}",name, std::meta::identifier_of(mem));
-        }else if constexpr (std::meta::is_array_type(memType)){
-            std::println("Array: {}{}", name, std::meta::identifier_of(mem));
-        } else if constexpr (std::meta::is_class_type(memType)){
-            std::string underscored = add_underscore(std::meta::identifier_of(mem));
-            flattenStruct<memType, incompleteType>(std::string_view(underscored));
-        } else {
-            std::println("Something else:: {}", std::meta::display_string_of(mem));
-        }
-    }
-}
+// Print helper function
 
 template <typename T>
 constexpr void printMembers(){
@@ -85,7 +70,7 @@ consteval void getDataMembers(std::vector<std::meta::info>& dataMembers, std::st
 }
 
 template <typename OriginalClass, typename IncompleteType>
-consteval void makeSubpacket(){
+consteval void makeGetterSetterClass(){
     std::vector<std::meta::info> members;
     getDataMembers<^^OriginalClass>(members, "");
     std::meta::define_aggregate(^^IncompleteType, members);
@@ -94,8 +79,9 @@ consteval void makeSubpacket(){
 
 consteval {
 
-makeSubpacket<structs::SubSubPacket, SubSubPacket_>();
-
+makeGetterSetterClass<structs::SubSubPacket, SubSubPacket_>();
+makeGetterSetterClass<structs::DataPacket, DataPacket_>();
+makeGetterSetterClass<structs::DataPacket2, DataPacket2_>();
 }
 
 
@@ -130,28 +116,58 @@ void bind_accessors(T& obj) {
     }
 }
 
-struct SubSubPacket : public SubSubPacket_ {
-    constexpr SubSubPacket() {
-        bind_accessors<SubSubPacket_>(static_cast<SubSubPacket_&>(*this)); 
-    }
+// struct SubSubPacket : public SubSubPacket_ {
+//     constexpr SubSubPacket() {
+//         bind_accessors<SubSubPacket_>(static_cast<SubSubPacket_&>(*this)); 
+//     }
 
-};
+// };
 
 template <typename Generated>
-class GetterSetter : public Generated {
+struct GetterSetter : public Generated {
     constexpr GetterSetter(){
-        bind_accessors<Generated>(static_cast<Generated&>(*this)); 
+        // bind_accessors<Generated>(static_cast<Generated&>(*this)); 
+        auto& obj(static_cast<Generated&>(*this));
+        template for (constexpr auto m : std::define_static_array(
+            std::meta::nonstatic_data_members_of(
+                ^^Generated, std::meta::access_context::unchecked()))) {
+            if constexpr (std::meta::has_identifier(m)) {
+            constexpr std::string_view id = std::meta::identifier_of(m);
 
+            if constexpr (id.starts_with("get_")) {
+                constexpr auto target = detail::find_member(^^Generated, id.substr(4));
+                obj.[:m:] = [&obj]() { return obj.[:target:]; };
+
+            } else if constexpr (id.starts_with("set_")) {
+                constexpr auto target = detail::find_member(^^Generated, id.substr(4));
+                using V = [:std::meta::type_of(target):];
+                obj.[:m:] = [&obj](V v) { obj.[:target:] = std::move(v); };
+            }
+            }
+}
     }
 };
 
 
 int main(){
 
-    printMembers<SubSubPacket>();
-    SubSubPacket pkt;
+    // printMembers<SubSubPacket>();
+    // SubSubPacket pkt;
     printMembers<SubSubPacket_>();
+    std::println();
+    printMembers<DataPacket2_>();
+    std::println();
+    printMembers<DataPacket_>();
+    std::println();
+
+    GetterSetter<SubSubPacket_> pkt;
+    GetterSetter<DataPacket_> dataPkt1;
+
     pkt.set_moreData(15.0);
     std::println("{}", pkt.get_moreData());
 
+    dataPkt1.set_packetId(12);
+    std::println("DataPkt ID: {}", dataPkt1.get_packetId());
+
+    
 }
