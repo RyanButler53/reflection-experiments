@@ -163,11 +163,11 @@ int main(){
     GetterSetter<SubSubPacket_> pkt;
     GetterSetter<DataPacket_> dataPkt1;
 
-    pkt.set_moreData(15.0);
-    std::println("{}", pkt.get_moreData());
+    //pkt.set_moreData(15.0);
+    //std::println("{}", pkt.get_moreData());
 
-    dataPkt1.set_packetId(12);
-    std::println("DataPkt ID: {}", dataPkt1.get_packetId());
+    //dataPkt1.set_packetId(12);
+    //std::println("DataPkt ID: {}", dataPkt1.get_packetId());
 
     
 }
