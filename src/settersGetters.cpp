@@ -79,7 +79,7 @@ consteval void makeGetterSetterClass(){
 
 consteval {
 
-makeGetterSetterClass<structs::SubSubPacket, SubSubPacket_>();
+makeGetterSetterClass<structs::SubPacket, SubSubPacket_>();
 makeGetterSetterClass<structs::DataPacket, DataPacket_>();
 makeGetterSetterClass<structs::DataPacket2, DataPacket2_>();
 }
